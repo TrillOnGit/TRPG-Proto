@@ -1,15 +1,9 @@
 use bevy::{core_pipeline::clear_color::ClearColorConfig, prelude::*};
 use bevy_ecs_ldtk::{LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use logic::{GridPosition, LogicPlugin, Unit};
 
-#[derive(Component)]
-struct Unit {
-    initiative: f32,
-    max_initiative: f32,
-}
-
-#[derive(Component)]
-struct GridPosition(IVec2);
+mod logic;
 
 const PROGRESS_BAR_WIDTH: f32 = 16.0;
 const PROGRESS_BAR_HEIGHT: f32 = 4.0;
@@ -77,12 +71,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     add_unit(commands);
 }
 
-fn advance_unit_initiative(mut query: Query<&mut Unit>, time: Res<Time>) {
-    for mut unit in &mut query {
-        unit.initiative = (unit.initiative + time.delta_seconds()).clamp(0.0, unit.max_initiative);
-    }
-}
-
 fn update_grid_transform(mut query: Query<(&GridPosition, &mut Transform)>) {
     for (grid_position, mut transform) in query.iter_mut() {
         transform.translation = Vec3::new(
@@ -119,9 +107,9 @@ fn main() {
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugin(bevy_ecs_ldtk::LdtkPlugin)
         .add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(LogicPlugin)
         .add_startup_system(setup)
         .insert_resource(LevelSelection::Index(0))
-        .add_system(advance_unit_initiative)
         .add_system(update_grid_transform)
         .add_system(update_initiative_progress_bar)
         .add_system(update_progress_bar_sprite)
