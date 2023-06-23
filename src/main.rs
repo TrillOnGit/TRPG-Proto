@@ -1,4 +1,6 @@
-use bevy::prelude::*;
+use bevy::{core_pipeline::clear_color::ClearColorConfig, prelude::*};
+use bevy_ecs_ldtk::{LdtkWorldBundle, LevelSelection};
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 #[derive(Component)]
 struct Unit {
@@ -30,9 +32,10 @@ fn add_unit(mut commands: Commands) {
             },
             GridPosition(IVec2 { x: 0, y: 0 }),
             SpriteBundle {
+                transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
                 sprite: Sprite {
                     color: Color::rgb(0.5, 0.4, 0.3),
-                    custom_size: Some(Vec2::new(16.0, 16.0)),
+                    custom_size: Some(Vec2::new(GRID_SIZE, GRID_SIZE)),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -55,7 +58,11 @@ fn add_unit(mut commands: Commands) {
         });
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn(LdtkWorldBundle {
+        ldtk_handle: asset_server.load("maps/levels.ldtk"),
+        ..Default::default()
+    });
     commands.spawn(Camera2dBundle {
         camera_2d: Camera2d {
             clear_color: ClearColorConfig::Custom(Color::rgb_u8(15, 10, 25)),
@@ -109,8 +116,11 @@ fn update_progress_bar_sprite(mut query: Query<(&ProgressBar, &mut Sprite, &mut 
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+        .add_plugin(bevy_ecs_ldtk::LdtkPlugin)
+        .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system(setup)
+        .insert_resource(LevelSelection::Index(0))
         .add_system(advance_unit_initiative)
         .add_system(update_grid_transform)
         .add_system(update_initiative_progress_bar)
