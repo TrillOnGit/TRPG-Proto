@@ -9,7 +9,10 @@ struct Unit {
 #[derive(Component)]
 struct GridPosition(IVec2);
 
-const PROGRESS_BAR_WIDTH: f32 = 60.0;
+const PROGRESS_BAR_WIDTH: f32 = 16.0;
+const PROGRESS_BAR_HEIGHT: f32 = 4.0;
+
+const GRID_SIZE: f32 = 16.0;
 #[derive(Component, Default)]
 struct ProgressBar {
     progress: f32,
@@ -29,7 +32,7 @@ fn add_unit(mut commands: Commands) {
             SpriteBundle {
                 sprite: Sprite {
                     color: Color::rgb(0.5, 0.4, 0.3),
-                    custom_size: Some(Vec2::new(50.0, 50.0)),
+                    custom_size: Some(Vec2::new(16.0, 16.0)),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -42,10 +45,10 @@ fn add_unit(mut commands: Commands) {
                 SpriteBundle {
                     sprite: Sprite {
                         color: Color::rgb(0.2, 0.7, 0.5),
-                        custom_size: Some(Vec2::new(PROGRESS_BAR_WIDTH, 10.0)),
+                        custom_size: Some(Vec2::new(PROGRESS_BAR_WIDTH, PROGRESS_BAR_HEIGHT)),
                         ..Default::default()
                     },
-                    transform: Transform::from_translation(Vec3::new(0.0, -30.0, 1.0)),
+                    transform: Transform::from_translation(Vec3::new(0.0, -4.0, 1.0)),
                     ..Default::default()
                 },
             ));
@@ -53,7 +56,17 @@ fn add_unit(mut commands: Commands) {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle {
+        camera_2d: Camera2d {
+            clear_color: ClearColorConfig::Custom(Color::rgb_u8(15, 10, 25)),
+        },
+        projection: OrthographicProjection {
+            scale: 1.0 / 3.0,
+            viewport_origin: Vec2::new(0.0, 0.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
     add_unit(commands);
 }
 
@@ -66,8 +79,8 @@ fn advance_unit_initiative(mut query: Query<&mut Unit>, time: Res<Time>) {
 fn update_grid_transform(mut query: Query<(&GridPosition, &mut Transform)>) {
     for (grid_position, mut transform) in query.iter_mut() {
         transform.translation = Vec3::new(
-            (grid_position.0.x as f32) * 50.0,
-            (grid_position.0.y as f32) * 50.0,
+            (grid_position.0.x as f32 + 0.5) * GRID_SIZE,
+            (grid_position.0.y as f32 + 0.5) * GRID_SIZE,
             transform.translation.z,
         );
     }
