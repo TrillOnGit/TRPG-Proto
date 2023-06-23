@@ -1,8 +1,8 @@
 use bevy::{core_pipeline::clear_color::ClearColorConfig, prelude::*};
 use bevy_ecs_ldtk::{LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use cursor::CursorPlugin;
-use logic::{GridPosition, LogicPlugin, Unit};
+use cursor::{CursorPlugin, CursorPos};
+use logic::{GridPosition, LogicPlugin, Unit, UnitAction, UnitTurn};
 
 mod cursor;
 mod logic;
@@ -19,7 +19,10 @@ struct ProgressBar {
 #[derive(Component)]
 struct InitiativeProgressBar;
 
-fn add_unit(mut commands: Commands) {
+#[derive(Resource)]
+struct SelectedUnit(Entity);
+
+fn add_unit(commands: &mut Commands) -> Entity {
     commands
         .spawn((
             Unit {
@@ -51,7 +54,8 @@ fn add_unit(mut commands: Commands) {
                     ..Default::default()
                 },
             ));
-        });
+        })
+        .id()
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -70,7 +74,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
         ..Default::default()
     });
-    add_unit(commands);
+    let unit = add_unit(&mut commands);
+    commands.insert_resource(SelectedUnit(unit));
 }
 
 fn update_grid_transform(mut query: Query<(&GridPosition, &mut Transform)>) {
@@ -104,6 +109,30 @@ fn update_progress_bar_sprite(mut query: Query<(&ProgressBar, &mut Sprite, &mut 
     }
 }
 
+fn mouse_movement(
+    mut commands: Commands,
+    units: Query<&GridPosition>,
+    buttons: Res<Input<MouseButton>>,
+    cursor: Res<CursorPos>,
+    selected_unit: Res<SelectedUnit>,
+) {
+    if buttons.just_pressed(MouseButton::Left) {
+        if let Ok(pos) = units.get(selected_unit.0) {
+            let cursor_tile_pos = cursor.0 / GRID_SIZE;
+            let cursor_tile_pos_snapped = IVec2::new(
+                cursor_tile_pos.x.floor() as i32,
+                cursor_tile_pos.y.floor() as i32,
+            );
+            commands.insert_resource(UnitTurn {
+                unit: selected_unit.0,
+                start_position: pos.0,
+                end_position: cursor_tile_pos_snapped,
+                action: UnitAction::Wait,
+            })
+        }
+    }
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
@@ -116,5 +145,6 @@ fn main() {
         .add_system(update_grid_transform)
         .add_system(update_initiative_progress_bar)
         .add_system(update_progress_bar_sprite)
+        .add_system(mouse_movement)
         .run();
 }
