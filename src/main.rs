@@ -1,8 +1,10 @@
 use bevy::{core_pipeline::clear_color::ClearColorConfig, prelude::*};
 use bevy_ecs_ldtk::{LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use cursor::CursorPlugin;
 use logic::{GridPosition, LogicPlugin, Unit};
 
+mod cursor;
 mod logic;
 
 const PROGRESS_BAR_WIDTH: f32 = 16.0;
@@ -107,6 +109,7 @@ fn main() {
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugin(bevy_ecs_ldtk::LdtkPlugin)
         .add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(CursorPlugin)
         .add_plugin(LogicPlugin)
         .add_startup_system(setup)
         .insert_resource(LevelSelection::Index(0))
