@@ -2,7 +2,7 @@ use bevy::{core_pipeline::clear_color::ClearColorConfig, prelude::*};
 use bevy_ecs_ldtk::{LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use cursor::{CursorPlugin, CursorPos};
-use logic::{GridPosition, LogicPlugin, Unit, UnitAction, UnitTurn};
+use logic::{GridPosition, LogicPlugin, ReachableInfo, Unit, UnitAction, UnitSpeed, UnitTurn};
 
 mod cursor;
 mod logic;
@@ -29,6 +29,7 @@ fn add_unit(commands: &mut Commands) -> Entity {
                 initiative: 0.0,
                 max_initiative: 10.0,
             },
+            UnitSpeed(5),
             GridPosition(IVec2 { x: 0, y: 0 }),
             SpriteBundle {
                 transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
@@ -133,6 +134,53 @@ fn mouse_movement(
     }
 }
 
+#[derive(Component)]
+struct ReachableDisplay;
+
+fn reachable_display_bundle() -> impl Bundle {
+    (
+        ReachableDisplay,
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::rgba_u8(77, 90, 200, 120),
+                custom_size: Some(Vec2::new(GRID_SIZE, GRID_SIZE)),
+                ..Default::default()
+            },
+            transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
+            ..Default::default()
+        },
+    )
+}
+
+fn adjust_reachable_display(
+    mut commands: Commands,
+    display: Query<With<ReachableDisplay>>,
+    tiles: Query<(Entity, Option<&Children>, &ReachableInfo)>,
+) {
+    for (entity, children, &ReachableInfo { reachable }) in tiles.iter() {
+        if reachable {
+            let has_display = children.map_or(false, |children| {
+                children.iter().any(|&c| display.contains(c))
+            });
+
+            if !has_display {
+                commands.entity(entity).with_children(|parent| {
+                    parent.spawn(reachable_display_bundle());
+                });
+            }
+        } else {
+            if let Some(children) = children {
+                for &child in children {
+                    if display.contains(child) {
+                        commands.entity(entity).remove_children(&[child]);
+                        commands.entity(child).despawn_recursive();
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
@@ -145,6 +193,7 @@ fn main() {
         .add_system(update_grid_transform)
         .add_system(update_initiative_progress_bar)
         .add_system(update_progress_bar_sprite)
+        .add_system(adjust_reachable_display)
         .add_system(mouse_movement)
         .run();
 }
