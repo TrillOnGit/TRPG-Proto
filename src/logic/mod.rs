@@ -154,11 +154,11 @@ pub struct LogicPlugin;
 
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(advance_unit_initiative);
-        app.add_system(apply_turn);
-        app.add_system(populate_logic_tiles);
-        app.add_system(mark_reachable_tiles);
-        app.add_event::<UnitTurn>();
-        app.register_type::<ReachableInfo>();
+        app.add_system(advance_unit_initiative)
+            .add_system(apply_turn)
+            .add_system(populate_logic_tiles)
+            .add_system(mark_reachable_tiles)
+            .add_event::<UnitTurn>()
+            .register_type::<ReachableInfo>();
     }
 }
