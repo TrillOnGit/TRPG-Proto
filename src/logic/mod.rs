@@ -41,14 +41,12 @@ pub struct UnitTurn {
 
 pub fn apply_turn(
     mut units: Query<(&mut GridPosition, &mut Unit)>,
-    turn: Option<Res<UnitTurn>>,
-    mut commands: Commands,
+    mut turns: EventReader<UnitTurn>,
 ) {
-    if let Some(turn) = turn {
+    for turn in turns.iter() {
         if let Ok((mut pos, mut unit)) = units.get_mut(turn.unit) {
             pos.0 = turn.end_position;
             unit.initiative = 0.0;
-            commands.remove_resource::<UnitTurn>()
         }
     }
 }
@@ -160,6 +158,7 @@ impl Plugin for LogicPlugin {
         app.add_system(apply_turn);
         app.add_system(populate_logic_tiles);
         app.add_system(mark_reachable_tiles);
+        app.add_event::<UnitTurn>();
         app.register_type::<ReachableInfo>();
     }
 }

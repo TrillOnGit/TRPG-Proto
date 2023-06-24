@@ -111,7 +111,7 @@ fn update_progress_bar_sprite(mut query: Query<(&ProgressBar, &mut Sprite, &mut 
 }
 
 fn mouse_movement(
-    mut commands: Commands,
+    mut turns: EventWriter<UnitTurn>,
     units: Query<&GridPosition>,
     buttons: Res<Input<MouseButton>>,
     cursor: Res<CursorPos>,
@@ -124,12 +124,12 @@ fn mouse_movement(
                 cursor_tile_pos.x.floor() as i32,
                 cursor_tile_pos.y.floor() as i32,
             );
-            commands.insert_resource(UnitTurn {
+            turns.send(UnitTurn {
                 unit: selected_unit.0,
                 start_position: pos.0,
                 end_position: cursor_tile_pos_snapped,
                 action: UnitAction::Wait,
-            })
+            });
         }
     }
 }
