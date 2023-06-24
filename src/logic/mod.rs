@@ -55,7 +55,7 @@ pub fn apply_turn(
 
 #[derive(SystemParam)]
 struct ReachableTilesParam<'w, 's> {
-    logical_tiles: Query<'w, 's, &'static LogicalTile>,
+    logical_tiles: Query<'w, 's, &'static LogicTile>,
     tile_storage: Query<'w, 's, &'static TileStorage>,
     units: Query<'w, 's, (&'static GridPosition, &'static UnitSpeed)>,
 }
@@ -121,7 +121,7 @@ fn mark_reachable_tiles(
 }
 
 #[derive(Component)]
-struct LogicalTile {
+struct LogicTile {
     can_move: bool,
     move_cost: u32,
 }
@@ -138,11 +138,11 @@ fn populate_logic_tiles(
     for (entity, &IntGridCell { value }) in tiles.iter() {
         commands.entity(entity).insert((
             match value {
-                2 => LogicalTile {
+                2 => LogicTile {
                     can_move: true,
                     move_cost: 1,
                 },
-                _ => LogicalTile {
+                _ => LogicTile {
                     can_move: false,
                     move_cost: 0,
                 },
