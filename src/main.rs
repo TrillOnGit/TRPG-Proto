@@ -155,13 +155,11 @@ fn reachable_display_bundle() -> impl Bundle {
 fn adjust_reachable_display(
     mut commands: Commands,
     display: Query<With<ReachableDisplay>>,
-    tiles: Query<(Entity, Option<&Children>, &ReachableInfo)>,
+    tiles: Query<(Entity, Option<&Children>, &ReachableInfo), Changed<ReachableInfo>>,
 ) {
     for (entity, children, &ReachableInfo { reachable }) in tiles.iter() {
         if reachable {
-            let has_display = children.map_or(false, |children| {
-                children.iter().any(|&c| display.contains(c))
-            });
+            let has_display = children.into_iter().flatten().any(|&c| display.contains(c));
 
             if !has_display {
                 commands.entity(entity).with_children(|parent| {
@@ -169,14 +167,17 @@ fn adjust_reachable_display(
                 });
             }
         } else {
-            if let Some(children) = children {
-                for &child in children {
-                    if display.contains(child) {
-                        commands.entity(entity).remove_children(&[child]);
-                        commands.entity(child).despawn_recursive();
-                    }
-                }
-            }
+            let to_remove: Vec<_> = children
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|&c| display.contains(c))
+                .collect();
+
+            commands.entity(entity).remove_children(&to_remove[..]);
+            to_remove
+                .into_iter()
+                .for_each(|c| commands.entity(c).despawn_recursive());
         }
     }
 }
