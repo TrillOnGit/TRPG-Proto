@@ -3224,6 +3224,7 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_ecs_ldtk",
+ "bevy_ecs_tilemap",
 ]
 
 [[package]]
