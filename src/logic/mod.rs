@@ -9,7 +9,7 @@ use bevy_ecs_tilemap::{
 
 use crate::SelectedUnit;
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct GridPosition(pub IVec2);
 
 #[derive(Component)]
@@ -27,11 +27,12 @@ fn advance_unit_initiative(mut query: Query<&mut Unit>, time: Res<Time>) {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum UnitAction {
     Wait,
 }
 
-#[derive(Resource)]
+#[derive(Clone, Copy)]
 pub struct UnitTurn {
     pub unit: Entity,
     pub start_position: IVec2,
@@ -39,15 +40,83 @@ pub struct UnitTurn {
     pub action: UnitAction,
 }
 
-pub fn apply_turn(
-    mut units: Query<(&mut GridPosition, &mut Unit)>,
+#[derive(Clone, Copy, Deref)]
+pub struct ValidatedTurn(UnitTurn);
+
+#[derive(SystemParam)]
+struct ValidateMovementParam<'w, 's> {
+    units: Query<'w, 's, &'static GridPosition>,
+    reachable_tiles_param: ReachableTilesParam<'w, 's>,
+}
+
+fn validate_movement(
+    unit: Entity,
+    start: IVec2,
+    end: IVec2,
+    ValidateMovementParam {
+        units,
+        reachable_tiles_param,
+    }: &ValidateMovementParam,
+) -> bool {
+    let Ok(pos) = units.get(unit) else {return false};
+    if pos.0 != start {
+        return false;
+    }
+    let Some(reachable_tiles) = get_reachable_tiles(reachable_tiles_param, unit) else {return false};
+    if !reachable_tiles.contains(&TilePos::new(end.x as u32, end.y as u32)) {
+        return false;
+    }
+    return true;
+}
+
+#[derive(SystemParam)]
+struct ValidateTurnParam<'w, 's> {
+    units: Query<'w, 's, &'static Unit>,
+    validate_movement_param: ValidateMovementParam<'w, 's>,
+}
+
+fn validate_turn(
+    turn: &UnitTurn,
+    ValidateTurnParam {
+        units,
+        validate_movement_param,
+    }: &ValidateTurnParam,
+) -> Option<ValidatedTurn> {
+    let unit = units.get(turn.unit).ok()?;
+    if unit.initiative != unit.max_initiative {
+        return None;
+    }
+    if !validate_movement(
+        turn.unit,
+        turn.start_position,
+        turn.end_position,
+        validate_movement_param,
+    ) {
+        return None;
+    }
+    Some(ValidatedTurn(*turn))
+}
+
+fn validate_turns(
     mut turns: EventReader<UnitTurn>,
+    mut validated_turns: EventWriter<ValidatedTurn>,
+    validate_turn_param: ValidateTurnParam,
+) {
+    validated_turns.send_batch(
+        turns
+            .iter()
+            .filter_map(|turn| validate_turn(turn, &validate_turn_param)),
+    );
+}
+
+fn apply_valid_turns(
+    mut units: Query<(&mut GridPosition, &mut Unit)>,
+    mut turns: EventReader<ValidatedTurn>,
 ) {
     for turn in turns.iter() {
-        if let Ok((mut pos, mut unit)) = units.get_mut(turn.unit) {
-            pos.0 = turn.end_position;
-            unit.initiative = 0.0;
-        }
+        let Ok((mut pos, mut unit)) = units.get_mut(turn.unit) else { continue };
+        pos.0 = turn.end_position;
+        unit.initiative = 0.0;
     }
 }
 
@@ -63,7 +132,7 @@ fn get_reachable_tiles(
         logical_tiles,
         tile_storage,
         units,
-    }: ReachableTilesParam,
+    }: &ReachableTilesParam,
     unit: Entity,
 ) -> Option<HashSet<TilePos>> {
     let mut reachable_tiles = HashSet::new();
@@ -107,7 +176,7 @@ fn mark_reachable_tiles(
     mut reachable_info: Query<(&TilePos, &mut ReachableInfo)>,
     selected: Res<SelectedUnit>,
 ) {
-    let reachable_tiles = get_reachable_tiles(reachable_tiles_param, selected.0);
+    let reachable_tiles = get_reachable_tiles(&reachable_tiles_param, selected.0);
     for (tile_pos, mut reachable_info) in reachable_info.iter_mut() {
         let reachable = reachable_tiles
             .as_ref()
@@ -155,10 +224,13 @@ pub struct LogicPlugin;
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
         app.add_system(advance_unit_initiative)
-            .add_system(apply_turn)
+            .add_system(validate_turns)
+            .add_system(apply_valid_turns)
             .add_system(populate_logic_tiles)
             .add_system(mark_reachable_tiles)
             .add_event::<UnitTurn>()
-            .register_type::<ReachableInfo>();
+            .add_event::<ValidatedTurn>()
+            .register_type::<ReachableInfo>()
+            .register_type::<GridPosition>();
     }
 }
