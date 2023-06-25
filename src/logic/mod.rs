@@ -38,6 +38,7 @@ fn advance_unit_initiative(mut query: Query<(&mut Unit, &UnitStats)>, time: Res<
 #[derive(Clone, Copy)]
 pub enum UnitAction {
     Wait,
+    Attack { target: Entity },
 }
 
 #[derive(Clone, Copy)]
@@ -128,6 +129,23 @@ fn apply_valid_turns(
     }
 }
 
+fn apply_valid_attacks(
+    mut units: Query<(&mut Unit)>,
+    unit_stats: Query<(&UnitStats)>,
+    mut turns: EventReader<ValidatedTurn>,
+) {
+    for turn in turns.iter() {
+        match turn.action {
+            UnitAction::Wait => {}
+            UnitAction::Attack { target } => {
+                let Ok(mut target_unit) = units.get_mut(target) else { continue };
+                let Ok(unit_stats) = unit_stats.get(turn.unit) else { continue };
+                target_unit.current_hp = target_unit.current_hp.saturating_sub(unit_stats.base_atk);
+            }
+        }
+    }
+}
+
 fn mark_reachable_tiles(
     reachable_tiles_param: reachable::ReachableTilesParam,
     mut reachable_info: Query<(&TilePos, &mut ReachableInfo)>,
@@ -183,6 +201,7 @@ impl Plugin for LogicPlugin {
         app.add_system(advance_unit_initiative)
             .add_system(validate_turns)
             .add_system(apply_valid_turns)
+            .add_system(apply_valid_attacks)
             .add_system(populate_logic_tiles)
             .add_system(mark_reachable_tiles)
             .add_event::<UnitTurn>()
