@@ -1,13 +1,12 @@
-use std::collections::{HashSet, VecDeque};
-
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_ecs_ldtk::IntGridCell;
-use bevy_ecs_tilemap::{
-    helpers::square_grid::neighbors::Neighbors,
-    tiles::{TilePos, TileStorage},
-};
+use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::SelectedUnit;
+
+use self::reachable::get_reachable_tiles;
+
+mod reachable;
 
 #[derive(Component, Reflect)]
 pub struct GridPosition(pub IVec2);
@@ -15,15 +14,24 @@ pub struct GridPosition(pub IVec2);
 #[derive(Component)]
 pub struct Unit {
     pub initiative: f32,
+    pub current_hp: u32,
+}
+
+#[derive(Component)]
+pub struct UnitStats {
+    pub max_hp: u32,
     pub max_initiative: f32,
+    pub base_atk: u32,
+    pub base_armor: u32,
 }
 
 #[derive(Component)]
 pub struct UnitSpeed(pub u32);
 
-fn advance_unit_initiative(mut query: Query<&mut Unit>, time: Res<Time>) {
-    for mut unit in &mut query {
-        unit.initiative = (unit.initiative + time.delta_seconds()).clamp(0.0, unit.max_initiative);
+fn advance_unit_initiative(mut query: Query<(&mut Unit, &UnitStats)>, time: Res<Time>) {
+    for (mut unit, unit_stats) in &mut query {
+        unit.initiative =
+            (unit.initiative + time.delta_seconds()).clamp(0.0, unit_stats.max_initiative);
     }
 }
 
@@ -46,7 +54,7 @@ pub struct ValidatedTurn(UnitTurn);
 #[derive(SystemParam)]
 struct ValidateMovementParam<'w, 's> {
     units: Query<'w, 's, &'static GridPosition>,
-    reachable_tiles_param: ReachableTilesParam<'w, 's>,
+    reachable_tiles_param: reachable::ReachableTilesParam<'w, 's>,
 }
 
 fn validate_movement(
@@ -71,7 +79,7 @@ fn validate_movement(
 
 #[derive(SystemParam)]
 struct ValidateTurnParam<'w, 's> {
-    units: Query<'w, 's, &'static Unit>,
+    units: Query<'w, 's, (&'static Unit, &'static UnitStats)>,
     validate_movement_param: ValidateMovementParam<'w, 's>,
 }
 
@@ -82,8 +90,8 @@ fn validate_turn(
         validate_movement_param,
     }: &ValidateTurnParam,
 ) -> Option<ValidatedTurn> {
-    let unit = units.get(turn.unit).ok()?;
-    if unit.initiative != unit.max_initiative {
+    let (unit, unit_stats) = units.get(turn.unit).ok()?;
+    if unit.initiative != unit_stats.max_initiative {
         return None;
     }
     if !validate_movement(
@@ -120,59 +128,8 @@ fn apply_valid_turns(
     }
 }
 
-#[derive(SystemParam)]
-struct ReachableTilesParam<'w, 's> {
-    logical_tiles: Query<'w, 's, &'static LogicTile>,
-    tile_storage: Query<'w, 's, &'static TileStorage>,
-    units: Query<'w, 's, (&'static GridPosition, &'static UnitSpeed)>,
-}
-
-fn get_reachable_tiles(
-    ReachableTilesParam {
-        logical_tiles,
-        tile_storage,
-        units,
-    }: &ReachableTilesParam,
-    unit: Entity,
-) -> Option<HashSet<TilePos>> {
-    let mut reachable_tiles = HashSet::new();
-    let (GridPosition(pos), &UnitSpeed(speed)) = units.get(unit).ok()?;
-    let tile_storage = tile_storage.get_single().ok()?;
-    let starting_pos = TilePos {
-        x: pos.x as u32,
-        y: pos.y as u32,
-    };
-    let mut tiles_to_explore = VecDeque::new();
-    tiles_to_explore.push_back((0, starting_pos));
-    reachable_tiles.insert(starting_pos);
-
-    while tiles_to_explore.len() > 0 {
-        let (cost_so_far, checking_pos) = tiles_to_explore.pop_front().unwrap();
-
-        let neighbors =
-            Neighbors::get_square_neighboring_positions(&checking_pos, &tile_storage.size, false);
-
-        for (neighbor_pos, neighbor_tile) in neighbors.iter().filter_map(|neighbor_pos| {
-            Some((
-                neighbor_pos,
-                logical_tiles.get(tile_storage.get(neighbor_pos)?).ok()?,
-            ))
-        }) {
-            let cost = cost_so_far + neighbor_tile.move_cost;
-            if cost <= speed && neighbor_tile.can_move {
-                tiles_to_explore.push_back((cost, *neighbor_pos));
-                reachable_tiles.insert(*neighbor_pos);
-            }
-        }
-        tiles_to_explore
-            .make_contiguous()
-            .sort_by_key(|(cost, _)| *cost);
-    }
-    Some(reachable_tiles)
-}
-
 fn mark_reachable_tiles(
-    reachable_tiles_param: ReachableTilesParam,
+    reachable_tiles_param: reachable::ReachableTilesParam,
     mut reachable_info: Query<(&TilePos, &mut ReachableInfo)>,
     selected: Res<SelectedUnit>,
 ) {

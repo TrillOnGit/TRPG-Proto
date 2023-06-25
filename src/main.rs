@@ -2,7 +2,9 @@ use bevy::{core_pipeline::clear_color::ClearColorConfig, prelude::*};
 use bevy_ecs_ldtk::{LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use cursor::{CursorPlugin, CursorPos};
-use logic::{GridPosition, LogicPlugin, ReachableInfo, Unit, UnitAction, UnitSpeed, UnitTurn};
+use logic::{
+    GridPosition, LogicPlugin, ReachableInfo, Unit, UnitAction, UnitSpeed, UnitStats, UnitTurn,
+};
 
 mod cursor;
 mod logic;
@@ -27,7 +29,13 @@ fn add_unit(commands: &mut Commands) -> Entity {
         .spawn((
             Unit {
                 initiative: 0.0,
-                max_initiative: 10.0,
+                current_hp: 5,
+            },
+            UnitStats {
+                max_hp: 5,
+                max_initiative: 5.0,
+                base_atk: 3,
+                base_armor: 2,
             },
             UnitSpeed(5),
             GridPosition(IVec2 { x: 3, y: 5 }),
@@ -90,13 +98,13 @@ fn update_grid_transform(mut query: Query<(&GridPosition, &mut Transform)>) {
 }
 
 fn update_initiative_progress_bar(
-    q_parent: Query<(&Unit, &Children)>,
+    q_parent: Query<(&Unit, &UnitStats, &Children)>,
     mut q_child: Query<&mut ProgressBar, With<InitiativeProgressBar>>,
 ) {
-    for (unit, children) in &q_parent {
+    for (unit, unit_stats, children) in &q_parent {
         for child in children {
             if let Ok(mut bar) = q_child.get_mut(*child) {
-                bar.progress = unit.initiative / unit.max_initiative;
+                bar.progress = unit.initiative / unit_stats.max_initiative;
             }
         }
     }
