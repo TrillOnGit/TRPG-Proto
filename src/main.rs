@@ -30,7 +30,7 @@ fn add_unit(commands: &mut Commands) -> Entity {
                 max_initiative: 10.0,
             },
             UnitSpeed(5),
-            GridPosition(IVec2 { x: 0, y: 0 }),
+            GridPosition(IVec2 { x: 3, y: 5 }),
             SpriteBundle {
                 transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
                 sprite: Sprite {
