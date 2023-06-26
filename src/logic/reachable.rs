@@ -9,6 +9,7 @@ use bevy_ecs_tilemap::tiles::TilePos;
 
 use std::collections::HashSet;
 
+use super::TileType;
 use super::UnitSpeed;
 
 use super::GridPosition;
@@ -20,7 +21,7 @@ use super::LogicTile;
 #[derive(SystemParam)]
 pub(super) struct ReachableTilesParam<'w, 's> {
     pub(super) logical_tiles: Query<'w, 's, &'static LogicTile>,
-    pub(super) tile_storage: Query<'w, 's, &'static TileStorage>,
+    pub(super) tile_storage: Query<'w, 's, &'static TileStorage, With<TileType>>,
     pub(super) units: Query<'w, 's, (&'static GridPosition, &'static UnitSpeed)>,
 }
 
@@ -49,12 +50,11 @@ pub(super) fn get_reachable_tiles(
         let neighbors =
             Neighbors::get_square_neighboring_positions(&checking_pos, &tile_storage.size, false);
 
-        for (neighbor_pos, neighbor_tile) in neighbors.iter().filter_map(|neighbor_pos| {
-            Some((
-                neighbor_pos,
-                logical_tiles.get(tile_storage.get(neighbor_pos)?).ok()?,
-            ))
-        }) {
+        for neighbor_pos in neighbors.iter() {
+            if reachable_tiles.contains(neighbor_pos) {
+                continue;
+            }
+            let Some(neighbor_tile) = tile_storage.get(neighbor_pos).and_then(|e| logical_tiles.get(e).ok()) else { continue };
             let cost = cost_so_far + neighbor_tile.move_cost;
             if cost <= speed && neighbor_tile.can_move {
                 tiles_to_explore.push_back((cost, *neighbor_pos));

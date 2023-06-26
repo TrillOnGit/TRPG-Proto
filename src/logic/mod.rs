@@ -1,6 +1,6 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_ecs_ldtk::IntGridCell;
-use bevy_ecs_tilemap::tiles::TilePos;
+use bevy_ecs_tilemap::tiles::{TilePos, TileStorage};
 
 use crate::SelectedUnit;
 
@@ -11,13 +11,13 @@ mod reachable;
 #[derive(Component, Reflect)]
 pub struct GridPosition(pub IVec2);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct Unit {
     pub initiative: f32,
     pub current_hp: u32,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct UnitStats {
     pub max_hp: u32,
     pub max_initiative: f32,
@@ -25,7 +25,7 @@ pub struct UnitStats {
     pub base_armor: u32,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct UnitSpeed(pub u32);
 
 fn advance_unit_initiative(mut query: Query<(&mut Unit, &UnitStats)>, time: Res<Time>) {
@@ -162,35 +162,65 @@ fn mark_reachable_tiles(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 struct LogicTile {
     can_move: bool,
     move_cost: u32,
 }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Default, Reflect)]
 pub struct ReachableInfo {
     pub reachable: bool,
+}
+
+#[derive(Component)]
+struct TileType;
+
+fn mark_tile_type_storage(
+    mut commands: Commands,
+    tile_storages: Query<(Entity, &Name), Added<TileStorage>>,
+) {
+    for (tile_storage, name) in tile_storages.iter() {
+        if name.as_str() == "TileType" {
+            commands.entity(tile_storage).insert(TileType);
+        }
+    }
 }
 
 fn populate_logic_tiles(
     mut commands: Commands,
     tiles: Query<(Entity, &IntGridCell), Added<IntGridCell>>,
+    other_tiles: Query<Entity, (Without<IntGridCell>, Without<LogicTile>)>,
+    tile_maps: Query<&TileStorage, With<TileType>>,
 ) {
     for (entity, &IntGridCell { value }) in tiles.iter() {
         commands.entity(entity).insert((
             match value {
                 2 => LogicTile {
                     can_move: true,
-                    move_cost: 1,
+                    move_cost: 2,
                 },
                 _ => LogicTile {
                     can_move: false,
                     move_cost: 0,
                 },
             },
-            ReachableInfo { reachable: false },
+            ReachableInfo::default(),
         ));
+    }
+    for tile_storage in tile_maps.iter() {
+        for &tile in tile_storage.iter().flatten() {
+            if !other_tiles.contains(tile) {
+                continue;
+            }
+            commands.entity(tile).insert((
+                LogicTile {
+                    can_move: true,
+                    move_cost: 1,
+                },
+                ReachableInfo::default(),
+            ));
+        }
     }
 }
 
@@ -202,11 +232,16 @@ impl Plugin for LogicPlugin {
             .add_system(validate_turns)
             .add_system(apply_valid_turns)
             .add_system(apply_valid_attacks)
+            .add_system(mark_tile_type_storage)
             .add_system(populate_logic_tiles)
             .add_system(mark_reachable_tiles)
             .add_event::<UnitTurn>()
             .add_event::<ValidatedTurn>()
+            .register_type::<LogicTile>()
             .register_type::<ReachableInfo>()
-            .register_type::<GridPosition>();
+            .register_type::<GridPosition>()
+            .register_type::<Unit>()
+            .register_type::<UnitStats>()
+            .register_type::<UnitSpeed>();
     }
 }
