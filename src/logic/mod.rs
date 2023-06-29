@@ -130,8 +130,8 @@ fn apply_valid_turns(
 }
 
 fn apply_valid_attacks(
-    mut units: Query<(&mut Unit)>,
-    unit_stats: Query<(&UnitStats)>,
+    mut units: Query<&mut Unit>,
+    unit_stats: Query<&UnitStats>,
     mut turns: EventReader<ValidatedTurn>,
 ) {
     for turn in turns.iter() {
