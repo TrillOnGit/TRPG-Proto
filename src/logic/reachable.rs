@@ -3,7 +3,8 @@ use bevy::prelude::*;
 
 use bevy_ecs_tilemap::helpers::square_grid::neighbors::Neighbors;
 
-use std::collections::VecDeque;
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 
 use bevy_ecs_tilemap::tiles::TilePos;
 
@@ -25,6 +26,37 @@ pub(super) struct ReachableTilesParam<'w, 's> {
     pub(super) units: Query<'w, 's, (&'static GridPosition, &'static UnitSpeed)>,
 }
 
+struct TileExploreQueueItem {
+    cost: u32,
+    pos: TilePos,
+}
+
+impl TileExploreQueueItem {
+    fn new(cost: u32, pos: TilePos) -> Self {
+        Self { cost, pos }
+    }
+}
+
+impl PartialEq for TileExploreQueueItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.cost == other.cost
+    }
+}
+
+impl Eq for TileExploreQueueItem {}
+
+impl PartialOrd for TileExploreQueueItem {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Reverse(self.cost).partial_cmp(&Reverse(other.cost))
+    }
+}
+
+impl Ord for TileExploreQueueItem {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        Reverse(self.cost).cmp(&Reverse(other.cost))
+    }
+}
+
 pub(super) fn get_reachable_tiles(
     ReachableTilesParam {
         logical_tiles,
@@ -40,30 +72,25 @@ pub(super) fn get_reachable_tiles(
         x: pos.x as u32,
         y: pos.y as u32,
     };
-    let mut tiles_to_explore = VecDeque::new();
-    tiles_to_explore.push_back((0, starting_pos));
+    let mut tiles_to_explore = BinaryHeap::new();
+    tiles_to_explore.push(TileExploreQueueItem::new(0, starting_pos));
     reachable_tiles.insert(starting_pos);
 
-    while tiles_to_explore.len() > 0 {
-        let (cost_so_far, checking_pos) = tiles_to_explore.pop_front().unwrap();
-
+    while let Some(TileExploreQueueItem { cost, pos }) = tiles_to_explore.pop() {
         let neighbors =
-            Neighbors::get_square_neighboring_positions(&checking_pos, &tile_storage.size, false);
+            Neighbors::get_square_neighboring_positions(&pos, &tile_storage.size, false);
 
         for neighbor_pos in neighbors.iter() {
             if reachable_tiles.contains(neighbor_pos) {
                 continue;
             }
             let Some(neighbor_tile) = tile_storage.get(neighbor_pos).and_then(|e| logical_tiles.get(e).ok()) else { continue };
-            let cost = cost_so_far + neighbor_tile.move_cost;
-            if cost <= speed && neighbor_tile.can_move {
-                tiles_to_explore.push_back((cost, *neighbor_pos));
+            let neighbor_cost = cost + neighbor_tile.move_cost;
+            if neighbor_cost <= speed && neighbor_tile.can_move {
+                tiles_to_explore.push(TileExploreQueueItem::new(neighbor_cost, *neighbor_pos));
                 reachable_tiles.insert(*neighbor_pos);
             }
         }
-        tiles_to_explore
-            .make_contiguous()
-            .sort_by_key(|(cost, _)| *cost);
     }
     Some(reachable_tiles)
 }
