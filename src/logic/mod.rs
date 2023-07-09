@@ -162,7 +162,7 @@ fn mark_reachable_tiles(
     }
 }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Default, Reflect)]
 struct LogicTile {
     can_move: bool,
     move_cost: u32,
@@ -171,6 +171,11 @@ struct LogicTile {
 #[derive(Component, Default, Reflect)]
 pub struct ReachableInfo {
     pub reachable: bool,
+}
+
+#[derive(Component, Default, Reflect)]
+pub struct AttackableInfo {
+    pub attackable: bool,
 }
 
 #[derive(Component)]
@@ -187,6 +192,13 @@ fn mark_tile_type_storage(
     }
 }
 
+#[derive(Bundle, Default)]
+struct TileExtraBundle {
+    pub logic_tile: LogicTile,
+    pub reachable_info: ReachableInfo,
+    pub attackable_info: AttackableInfo,
+}
+
 fn populate_logic_tiles(
     mut commands: Commands,
     tiles: Query<(Entity, &IntGridCell), Added<IntGridCell>>,
@@ -194,8 +206,8 @@ fn populate_logic_tiles(
     tile_maps: Query<&TileStorage, With<TileType>>,
 ) {
     for (entity, &IntGridCell { value }) in tiles.iter() {
-        commands.entity(entity).insert((
-            match value {
+        commands.entity(entity).insert(TileExtraBundle {
+            logic_tile: match value {
                 2 => LogicTile {
                     can_move: true,
                     move_cost: 2,
@@ -205,21 +217,21 @@ fn populate_logic_tiles(
                     move_cost: 0,
                 },
             },
-            ReachableInfo::default(),
-        ));
+            ..Default::default()
+        });
     }
     for tile_storage in tile_maps.iter() {
         for &tile in tile_storage.iter().flatten() {
             if !other_tiles.contains(tile) {
                 continue;
             }
-            commands.entity(tile).insert((
-                LogicTile {
+            commands.entity(tile).insert(TileExtraBundle {
+                logic_tile: LogicTile {
                     can_move: true,
                     move_cost: 1,
                 },
-                ReachableInfo::default(),
-            ));
+                ..Default::default()
+            });
         }
     }
 }
