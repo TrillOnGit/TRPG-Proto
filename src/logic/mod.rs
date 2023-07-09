@@ -1,10 +1,12 @@
+use std::collections::HashSet;
+
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_ecs_ldtk::IntGridCell;
 use bevy_ecs_tilemap::tiles::{TilePos, TileStorage};
 
 use crate::SelectedUnit;
 
-use self::reachable::get_reachable_tiles;
+use self::reachable::{get_attackable_tiles, get_reachable_tiles};
 
 mod reachable;
 
@@ -23,6 +25,11 @@ pub struct UnitStats {
     pub max_initiative: f32,
     pub base_atk: u32,
     pub base_armor: u32,
+}
+
+#[derive(Component, Reflect)]
+pub struct UnitRange {
+    pub valid_ranges: Vec<u32>,
 }
 
 #[derive(Component, Reflect)]
@@ -149,15 +156,23 @@ fn apply_valid_attacks(
 fn mark_reachable_tiles(
     reachable_tiles_param: reachable::ReachableTilesParam,
     mut reachable_info: Query<(&TilePos, &mut ReachableInfo)>,
+    unit_ranges: Query<(&UnitRange)>,
     selected: Res<SelectedUnit>,
 ) {
-    let reachable_tiles = get_reachable_tiles(&reachable_tiles_param, selected.0);
+    let reachable_tiles =
+        get_reachable_tiles(&reachable_tiles_param, selected.0).unwrap_or_default();
+    let attack_movable_tiles = unit_ranges
+        .get(selected.0)
+        .map(|unit_range| get_attackable_tiles(&reachable_tiles, &unit_range.valid_ranges))
+        .unwrap_or_default();
     for (tile_pos, mut reachable_info) in reachable_info.iter_mut() {
-        let reachable = reachable_tiles
-            .as_ref()
-            .map_or(false, |r| r.contains(tile_pos));
+        let reachable = reachable_tiles.contains(tile_pos);
+        let attack_movable = attack_movable_tiles.contains(tile_pos);
         if reachable_info.reachable != reachable {
             reachable_info.reachable = reachable;
+        }
+        if reachable_info.attack_movable != attack_movable {
+            reachable_info.attack_movable = attack_movable;
         }
     }
 }
@@ -171,6 +186,7 @@ struct LogicTile {
 #[derive(Component, Default, Reflect)]
 pub struct ReachableInfo {
     pub reachable: bool,
+    pub attack_movable: bool,
 }
 
 #[derive(Component, Default, Reflect)]
@@ -254,6 +270,7 @@ impl Plugin for LogicPlugin {
             .register_type::<GridPosition>()
             .register_type::<Unit>()
             .register_type::<UnitStats>()
-            .register_type::<UnitSpeed>();
+            .register_type::<UnitSpeed>()
+            .register_type::<UnitRange>();
     }
 }

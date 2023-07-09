@@ -94,3 +94,77 @@ pub(super) fn get_reachable_tiles(
     }
     Some(reachable_tiles)
 }
+
+pub(super) fn get_attackable_tiles(
+    reachable_tiles: &HashSet<TilePos>,
+    ranges: &[u32],
+) -> HashSet<TilePos> {
+    let mut attackable_tiles = HashSet::new();
+    for range in ranges.iter().cloned() {
+        for reachable_tile in reachable_tiles.iter() {
+            for offset in get_range_offsets(range) {
+                if let Some(pos) = || -> Option<_> {
+                    Some(TilePos::new(
+                        reachable_tile.x.checked_add_signed(offset.x)?,
+                        reachable_tile.y.checked_add_signed(offset.y)?,
+                    ))
+                }() {
+                    attackable_tiles.insert(pos);
+                }
+            }
+        }
+    }
+    attackable_tiles
+}
+
+fn get_range_offsets(range: u32) -> impl Iterator<Item = IVec2> {
+    let mut x = -(range as i32);
+    let mut y = 0;
+    std::iter::from_fn(move || {
+        if x > (range as i32) {
+            return None;
+        }
+        let output = Some(IVec2::new(x, y));
+        y *= -1;
+        if y >= 0 {
+            x += 1;
+            if x <= 0 {
+                y += 1;
+            } else {
+                y -= 1;
+            }
+        }
+        output
+    })
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashSet;
+
+    use bevy::prelude::IVec2;
+
+    use super::get_range_offsets;
+
+    fn test_range_offsets(range: u32) {
+        let range_offsets: HashSet<_> = get_range_offsets(range).collect();
+        let ri = range as i32;
+
+        let mut expected_offsets = HashSet::new();
+        for x in -ri..(ri + 1) {
+            for y in -ri..(ri + 1) {
+                if x.abs() + y.abs() == ri {
+                    expected_offsets.insert(IVec2::new(x, y));
+                }
+            }
+        }
+        assert_eq!(range_offsets, expected_offsets);
+    }
+
+    #[test]
+    fn get_range_offsets_returns_correct_values() {
+        for r in 0..5 {
+            test_range_offsets(r);
+        }
+    }
+}

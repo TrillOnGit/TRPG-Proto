@@ -3,7 +3,8 @@ use bevy_ecs_ldtk::{LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use cursor::{CursorPlugin, CursorPos};
 use logic::{
-    GridPosition, LogicPlugin, ReachableInfo, Unit, UnitAction, UnitSpeed, UnitStats, UnitTurn,
+    GridPosition, LogicPlugin, ReachableInfo, Unit, UnitAction, UnitRange, UnitSpeed, UnitStats,
+    UnitTurn,
 };
 
 mod cursor;
@@ -38,6 +39,9 @@ fn add_unit(commands: &mut Commands) -> Entity {
                 base_armor: 2,
             },
             UnitSpeed(5),
+            UnitRange {
+                valid_ranges: vec![2],
+            },
             GridPosition(IVec2 { x: 3, y: 5 }),
             SpriteBundle {
                 transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
@@ -145,12 +149,18 @@ fn mouse_movement(
 #[derive(Component)]
 struct ReachableDisplay;
 
-fn reachable_display_bundle() -> impl Bundle {
+const REACHABLE_COLOR: Color =
+    Color::rgba(77.0 / 255.0, 90.0 / 255.0, 200.0 / 255.0, 120.0 / 255.0);
+
+const ATTACKABLE_COLOR: Color =
+    Color::rgba(200.0 / 255.0, 90.0 / 255.0, 77.0 / 255.0, 120.0 / 255.0);
+
+fn reachable_display_bundle(color: Color) -> impl Bundle {
     (
         ReachableDisplay,
         SpriteBundle {
             sprite: Sprite {
-                color: Color::rgba_u8(77, 90, 200, 120),
+                color,
                 custom_size: Some(Vec2::new(GRID_SIZE, GRID_SIZE)),
                 ..Default::default()
             },
@@ -162,16 +172,36 @@ fn reachable_display_bundle() -> impl Bundle {
 
 fn adjust_reachable_display(
     mut commands: Commands,
-    display: Query<With<ReachableDisplay>>,
+    mut displays: Query<&mut Sprite, With<ReachableDisplay>>,
     tiles: Query<(Entity, Option<&Children>, &ReachableInfo), Changed<ReachableInfo>>,
 ) {
-    for (entity, children, &ReachableInfo { reachable }) in tiles.iter() {
-        if reachable {
-            let has_display = children.into_iter().flatten().any(|&c| display.contains(c));
+    for (
+        entity,
+        children,
+        &ReachableInfo {
+            reachable,
+            attack_movable,
+        },
+    ) in tiles.iter()
+    {
+        if reachable || attack_movable {
+            let color = if reachable {
+                REACHABLE_COLOR
+            } else {
+                ATTACKABLE_COLOR
+            };
 
-            if !has_display {
+            let mut found = false;
+            for &c in children.into_iter().flatten() {
+                if let Ok(mut display) = displays.get_mut(c) {
+                    display.color = color;
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
                 commands.entity(entity).with_children(|parent| {
-                    parent.spawn(reachable_display_bundle());
+                    parent.spawn(reachable_display_bundle(color));
                 });
             }
         } else {
@@ -179,7 +209,7 @@ fn adjust_reachable_display(
                 .into_iter()
                 .flatten()
                 .copied()
-                .filter(|&c| display.contains(c))
+                .filter(|&c| displays.contains(c))
                 .collect();
 
             commands.entity(entity).remove_children(&to_remove[..]);
