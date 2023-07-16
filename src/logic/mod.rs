@@ -1,16 +1,14 @@
-use std::collections::HashSet;
-
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_ecs_ldtk::IntGridCell;
-use bevy_ecs_tilemap::tiles::{TilePos, TileStorage};
 
-use crate::SelectedUnit;
+use bevy_ecs_tilemap::tiles::TilePos;
 
-use self::reachable::{get_attackable_tiles, get_reachable_tiles};
+pub use self::reachable::*;
+pub use self::tile::*;
 
 mod reachable;
+mod tile;
 
-#[derive(Component, Reflect)]
+#[derive(Deref, Component, Reflect)]
 pub struct GridPosition(pub IVec2);
 
 #[derive(Component, Reflect)]
@@ -65,24 +63,18 @@ struct ValidateMovementParam<'w, 's> {
     reachable_tiles_param: reachable::ReachableTilesParam<'w, 's>,
 }
 
-fn validate_movement(
-    unit: Entity,
-    start: IVec2,
-    end: IVec2,
-    ValidateMovementParam {
-        units,
-        reachable_tiles_param,
-    }: &ValidateMovementParam,
-) -> bool {
-    let Ok(pos) = units.get(unit) else {return false};
-    if pos.0 != start {
-        return false;
+impl<'w, 's> ValidateMovementParam<'w, 's> {
+    fn validate(&self, unit: Entity, start: IVec2, end: IVec2) -> bool {
+        let Ok(pos) = self.units.get(unit) else {return false};
+        if pos.0 != start {
+            return false;
+        }
+        let Some(reachable_tiles) = self.reachable_tiles_param.get(unit) else {return false};
+        if !reachable_tiles.contains(&TilePos::new(end.x as u32, end.y as u32)) {
+            return false;
+        }
+        return true;
     }
-    let Some(reachable_tiles) = get_reachable_tiles(reachable_tiles_param, unit) else {return false};
-    if !reachable_tiles.contains(&TilePos::new(end.x as u32, end.y as u32)) {
-        return false;
-    }
-    return true;
 }
 
 #[derive(SystemParam)]
@@ -91,26 +83,20 @@ struct ValidateTurnParam<'w, 's> {
     validate_movement_param: ValidateMovementParam<'w, 's>,
 }
 
-fn validate_turn(
-    turn: &UnitTurn,
-    ValidateTurnParam {
-        units,
-        validate_movement_param,
-    }: &ValidateTurnParam,
-) -> Option<ValidatedTurn> {
-    let (unit, unit_stats) = units.get(turn.unit).ok()?;
-    if unit.initiative != unit_stats.max_initiative {
-        return None;
+impl<'w, 's> ValidateTurnParam<'w, 's> {
+    fn validate(&self, turn: &UnitTurn) -> Option<ValidatedTurn> {
+        let (unit, unit_stats) = self.units.get(turn.unit).ok()?;
+        if unit.initiative != unit_stats.max_initiative {
+            return None;
+        }
+        if !self
+            .validate_movement_param
+            .validate(turn.unit, turn.start_position, turn.end_position)
+        {
+            return None;
+        }
+        Some(ValidatedTurn(*turn))
     }
-    if !validate_movement(
-        turn.unit,
-        turn.start_position,
-        turn.end_position,
-        validate_movement_param,
-    ) {
-        return None;
-    }
-    Some(ValidatedTurn(*turn))
 }
 
 fn validate_turns(
@@ -121,7 +107,7 @@ fn validate_turns(
     validated_turns.send_batch(
         turns
             .iter()
-            .filter_map(|turn| validate_turn(turn, &validate_turn_param)),
+            .filter_map(|turn| validate_turn_param.validate(turn)),
     );
 }
 
@@ -153,120 +139,17 @@ fn apply_valid_attacks(
     }
 }
 
-fn mark_reachable_tiles(
-    reachable_tiles_param: reachable::ReachableTilesParam,
-    mut reachable_info: Query<(&TilePos, &mut ReachableInfo)>,
-    unit_ranges: Query<(&UnitRange)>,
-    selected: Res<SelectedUnit>,
-) {
-    let reachable_tiles =
-        get_reachable_tiles(&reachable_tiles_param, selected.0).unwrap_or_default();
-    let attack_movable_tiles = unit_ranges
-        .get(selected.0)
-        .map(|unit_range| get_attackable_tiles(&reachable_tiles, &unit_range.valid_ranges))
-        .unwrap_or_default();
-    for (tile_pos, mut reachable_info) in reachable_info.iter_mut() {
-        let reachable = reachable_tiles.contains(tile_pos);
-        let attack_movable = attack_movable_tiles.contains(tile_pos);
-        if reachable_info.reachable != reachable {
-            reachable_info.reachable = reachable;
-        }
-        if reachable_info.attack_movable != attack_movable {
-            reachable_info.attack_movable = attack_movable;
-        }
-    }
-}
-
-#[derive(Component, Default, Reflect)]
-struct LogicTile {
-    can_move: bool,
-    move_cost: u32,
-}
-
-#[derive(Component, Default, Reflect)]
-pub struct ReachableInfo {
-    pub reachable: bool,
-    pub attack_movable: bool,
-}
-
-#[derive(Component, Default, Reflect)]
-pub struct AttackableInfo {
-    pub attackable: bool,
-}
-
-#[derive(Component)]
-struct TileType;
-
-fn mark_tile_type_storage(
-    mut commands: Commands,
-    tile_storages: Query<(Entity, &Name), Added<TileStorage>>,
-) {
-    for (tile_storage, name) in tile_storages.iter() {
-        if name.as_str() == "TileType" {
-            commands.entity(tile_storage).insert(TileType);
-        }
-    }
-}
-
-#[derive(Bundle, Default)]
-struct TileExtraBundle {
-    pub logic_tile: LogicTile,
-    pub reachable_info: ReachableInfo,
-    pub attackable_info: AttackableInfo,
-}
-
-fn populate_logic_tiles(
-    mut commands: Commands,
-    tiles: Query<(Entity, &IntGridCell), Added<IntGridCell>>,
-    other_tiles: Query<Entity, (Without<IntGridCell>, Without<LogicTile>)>,
-    tile_maps: Query<&TileStorage, With<TileType>>,
-) {
-    for (entity, &IntGridCell { value }) in tiles.iter() {
-        commands.entity(entity).insert(TileExtraBundle {
-            logic_tile: match value {
-                2 => LogicTile {
-                    can_move: true,
-                    move_cost: 2,
-                },
-                _ => LogicTile {
-                    can_move: false,
-                    move_cost: 0,
-                },
-            },
-            ..Default::default()
-        });
-    }
-    for tile_storage in tile_maps.iter() {
-        for &tile in tile_storage.iter().flatten() {
-            if !other_tiles.contains(tile) {
-                continue;
-            }
-            commands.entity(tile).insert(TileExtraBundle {
-                logic_tile: LogicTile {
-                    can_move: true,
-                    move_cost: 1,
-                },
-                ..Default::default()
-            });
-        }
-    }
-}
-
 pub struct LogicPlugin;
 
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(advance_unit_initiative)
+        app.add_plugin(TilePlugin)
+            .add_system(advance_unit_initiative)
             .add_system(validate_turns)
             .add_system(apply_valid_turns)
             .add_system(apply_valid_attacks)
-            .add_system(mark_tile_type_storage)
-            .add_system(populate_logic_tiles)
-            .add_system(mark_reachable_tiles)
             .add_event::<UnitTurn>()
             .add_event::<ValidatedTurn>()
-            .register_type::<LogicTile>()
-            .register_type::<ReachableInfo>()
             .register_type::<GridPosition>()
             .register_type::<Unit>()
             .register_type::<UnitStats>()
