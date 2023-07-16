@@ -109,11 +109,10 @@ fn mouse_movement(
 #[derive(Component)]
 struct ReachableDisplay;
 
-const REACHABLE_COLOR: Color =
-    Color::rgba(77.0 / 255.0, 90.0 / 255.0, 200.0 / 255.0, 120.0 / 255.0);
+const REACHABLE_COLOR: Color = Color::rgba(77.0 / 255.0, 90.0 / 255.0, 200.0 / 255.0, 80.0 / 255.0);
 
 const ATTACKABLE_COLOR: Color =
-    Color::rgba(200.0 / 255.0, 90.0 / 255.0, 77.0 / 255.0, 120.0 / 255.0);
+    Color::rgba(200.0 / 255.0, 90.0 / 255.0, 77.0 / 255.0, 80.0 / 255.0);
 
 fn reachable_display_bundle() -> impl Bundle {
     (
