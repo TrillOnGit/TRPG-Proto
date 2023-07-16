@@ -2,6 +2,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use bevy_ecs_tilemap::tiles::TilePos;
 
+use crate::TRPGState;
+
 pub use self::reachable::*;
 pub use self::tile::*;
 
@@ -153,10 +155,15 @@ pub struct LogicPlugin;
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(TilePlugin)
-            .add_system(advance_unit_initiative)
-            .add_system(validate_turns)
-            .add_system(apply_valid_turns)
-            .add_system(apply_valid_attacks)
+            .add_systems(
+                (
+                    advance_unit_initiative,
+                    validate_turns,
+                    apply_valid_turns,
+                    apply_valid_attacks,
+                )
+                    .in_set(OnUpdate(TRPGState::Battle)),
+            )
             .add_event::<UnitTurn>()
             .add_event::<ValidatedTurn>()
             .register_type::<GridPosition>()

@@ -157,8 +157,17 @@ fn update_reachable_display(
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, States)]
+pub enum TRPGState {
+    #[default]
+    Battle,
+    ChoosingMove,
+    ChoosingAttack,
+}
+
 fn main() {
     App::new()
+        .add_state::<TRPGState>()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugin(bevy_ecs_ldtk::LdtkPlugin)
         .add_plugin(WorldInspectorPlugin::new())
@@ -167,9 +176,14 @@ fn main() {
         .add_plugin(ProgressBarPlugin)
         .add_startup_system(setup)
         .insert_resource(LevelSelection::Index(0))
-        .add_system(update_grid_transform)
-        .add_system(add_reachable_display)
-        .add_system(update_reachable_display)
-        .add_system(mouse_movement)
+        .add_systems(
+            (
+                update_grid_transform,
+                add_reachable_display,
+                update_reachable_display,
+                mouse_movement,
+            )
+                .in_set(OnUpdate(TRPGState::Battle)),
+        )
         .run();
 }

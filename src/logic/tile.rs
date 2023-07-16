@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_ecs_ldtk::IntGridCell;
 use bevy_ecs_tilemap::tiles::{TilePos, TileStorage};
 
-use crate::SelectedUnit;
+use crate::{SelectedUnit, TRPGState};
 
 use super::{get_attackable_tiles, reachable, UnitRange};
 
@@ -119,10 +119,15 @@ pub struct TilePlugin;
 
 impl Plugin for TilePlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(mark_tile_type_storage)
-            .add_system(populate_logic_tiles)
-            .add_system(mark_reachable_tiles)
-            .register_type::<LogicTile>()
-            .register_type::<ReachableInfo>();
+        app.add_systems(
+            (
+                mark_tile_type_storage,
+                populate_logic_tiles,
+                mark_reachable_tiles,
+            )
+                .in_set(OnUpdate(TRPGState::Battle)),
+        )
+        .register_type::<LogicTile>()
+        .register_type::<ReachableInfo>();
     }
 }

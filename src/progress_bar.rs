@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::logic::{Unit, UnitStats};
+use crate::{
+    logic::{Unit, UnitStats},
+    TRPGState,
+};
 
 const PROGRESS_BAR_WIDTH: f32 = 16.0;
 const PROGRESS_BAR_HEIGHT: f32 = 4.0;
@@ -54,7 +57,9 @@ pub struct ProgressBarPlugin;
 
 impl Plugin for ProgressBarPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(update_initiative_progress_bar)
-            .add_system(update_progress_bar_sprite);
+        app.add_systems(
+            (update_initiative_progress_bar, update_progress_bar_sprite)
+                .in_set(OnUpdate(TRPGState::Battle)),
+        );
     }
 }
