@@ -115,67 +115,45 @@ const REACHABLE_COLOR: Color =
 const ATTACKABLE_COLOR: Color =
     Color::rgba(200.0 / 255.0, 90.0 / 255.0, 77.0 / 255.0, 120.0 / 255.0);
 
-fn reachable_display_bundle(color: Color) -> impl Bundle {
+fn reachable_display_bundle() -> impl Bundle {
     (
+        Name::new("Reachable Display"),
         ReachableDisplay,
         SpriteBundle {
             sprite: Sprite {
-                color,
                 custom_size: Some(Vec2::new(GRID_SIZE, GRID_SIZE)),
                 ..Default::default()
             },
             transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
+            visibility: Visibility::Hidden,
             ..Default::default()
         },
     )
 }
 
-fn adjust_reachable_display(
+fn add_reachable_display(mut commands: Commands, tiles: Query<Entity, Added<ReachableInfo>>) {
+    for tile in tiles.iter() {
+        commands.entity(tile).with_children(|parent| {
+            parent.spawn(reachable_display_bundle());
+        });
+    }
+}
+
+fn update_reachable_display(
     mut commands: Commands,
-    mut displays: Query<&mut Sprite, With<ReachableDisplay>>,
-    tiles: Query<(Entity, Option<&Children>, &ReachableInfo), Changed<ReachableInfo>>,
+    mut displays: Query<(Entity, &mut Sprite, &mut Visibility, &Parent), With<ReachableDisplay>>,
+    tiles: Query<&ReachableInfo>,
 ) {
-    for (
-        entity,
-        children,
-        &ReachableInfo {
-            reachable,
-            attack_movable,
-        },
-    ) in tiles.iter()
-    {
-        if reachable || attack_movable {
-            let color = if reachable {
-                REACHABLE_COLOR
-            } else {
-                ATTACKABLE_COLOR
-            };
-
-            let mut found = false;
-            for &c in children.into_iter().flatten() {
-                if let Ok(mut display) = displays.get_mut(c) {
-                    display.color = color;
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                commands.entity(entity).with_children(|parent| {
-                    parent.spawn(reachable_display_bundle(color));
-                });
-            }
+    for (display, mut sprite, mut visibility, parent) in displays.iter_mut() {
+        let Ok(reachable_info) = tiles.get(parent.get()) else { commands.entity(display).despawn_recursive(); continue; };
+        if reachable_info.reachable {
+            sprite.color = REACHABLE_COLOR;
+            *visibility = Default::default();
+        } else if reachable_info.attack_movable {
+            sprite.color = ATTACKABLE_COLOR;
+            *visibility = Default::default();
         } else {
-            let to_remove: Vec<_> = children
-                .into_iter()
-                .flatten()
-                .copied()
-                .filter(|&c| displays.contains(c))
-                .collect();
-
-            commands.entity(entity).remove_children(&to_remove[..]);
-            to_remove
-                .into_iter()
-                .for_each(|c| commands.entity(c).despawn_recursive());
+            *visibility = Visibility::Hidden;
         }
     }
 }
@@ -191,7 +169,8 @@ fn main() {
         .add_startup_system(setup)
         .insert_resource(LevelSelection::Index(0))
         .add_system(update_grid_transform)
-        .add_system(adjust_reachable_display)
+        .add_system(add_reachable_display)
+        .add_system(update_reachable_display)
         .add_system(mouse_movement)
         .run();
 }
