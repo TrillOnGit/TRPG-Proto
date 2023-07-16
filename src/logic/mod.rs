@@ -33,6 +33,15 @@ pub struct UnitRange {
 #[derive(Component, Reflect)]
 pub struct UnitSpeed(pub u32);
 
+#[derive(Bundle)]
+pub struct UnitLogicBundle {
+    pub unit: Unit,
+    pub unit_stats: UnitStats,
+    pub unit_range: UnitRange,
+    pub unit_speed: UnitSpeed,
+    pub grid_position: GridPosition,
+}
+
 fn advance_unit_initiative(mut query: Query<(&mut Unit, &UnitStats)>, time: Res<Time>) {
     for (mut unit, unit_stats) in &mut query {
         unit.initiative =

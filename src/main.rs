@@ -3,8 +3,8 @@ use bevy_ecs_ldtk::{LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use cursor::{CursorPlugin, CursorPos};
 use logic::{
-    GridPosition, LogicPlugin, ReachableInfo, Unit, UnitAction, UnitRange, UnitSpeed, UnitStats,
-    UnitTurn,
+    GridPosition, LogicPlugin, ReachableInfo, Unit, UnitAction, UnitLogicBundle, UnitRange,
+    UnitSpeed, UnitStats, UnitTurn,
 };
 use progress_bar::{initiative_progress_bar_bundle, ProgressBarPlugin};
 
@@ -19,21 +19,23 @@ struct SelectedUnit(Entity);
 fn add_unit(commands: &mut Commands) -> Entity {
     commands
         .spawn((
-            Unit {
-                initiative: 0.0,
-                current_hp: 5,
+            UnitLogicBundle {
+                unit: Unit {
+                    initiative: 0.0,
+                    current_hp: 5,
+                },
+                unit_stats: UnitStats {
+                    max_hp: 5,
+                    max_initiative: 5.0,
+                    base_atk: 3,
+                    base_armor: 2,
+                },
+                unit_speed: UnitSpeed(5),
+                unit_range: UnitRange {
+                    valid_ranges: vec![2],
+                },
+                grid_position: GridPosition(IVec2 { x: 3, y: 5 }),
             },
-            UnitStats {
-                max_hp: 5,
-                max_initiative: 5.0,
-                base_atk: 3,
-                base_armor: 2,
-            },
-            UnitSpeed(5),
-            UnitRange {
-                valid_ranges: vec![2],
-            },
-            GridPosition(IVec2 { x: 3, y: 5 }),
             SpriteBundle {
                 transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
                 sprite: Sprite {
